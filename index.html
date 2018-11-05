@@ -584,12 +584,12 @@
                             polygons[aa].linePoints[bb].push(pp);
                             //if(temp==0 && i==2 && aa==2 && bb==1){
                                 //console.log(aa,bb)
-                                //drawLine(ctx,mp,pp,"#ff0000");
+                                //
                             //}
-                            
+                            //drawLine(ctx,mp,pp,"#ff0000");
                         }
 
-                        drawLine(ctx,mp,p4,"#ff0000");
+                        //drawLine(ctx,mp,p4,"#ff0000");
                         
 
                     }                    
@@ -607,7 +607,7 @@
             for(var i = 0;i<len;i++){ 
                 if(polygon.lineTypes[i]==0){
                     if(polygon.linePoints[i].length==0){
-                        console.log(i)                        
+                        //console.log(i)                        
                         if(polygon.pointTypes[i]==0 && polygon.pointTypes[(i+1)%len]==0){
                             polygon.linePoints[i].push(polygon.points[i]);
                             polygon.linePoints[i].push(polygon.points[(i+1)%len]);
@@ -664,9 +664,9 @@
                             drawPolygon(ctx,[mp,polygon.linePoints[j][k],polygon.linePoints[j][k+1]],"#ffff00","fill");
                             //drawCircle(ctx,polygon.linePoints[j][k],5,"#ff0000","fill");
                         }
-                        for(var k = 0;k<len1;k++){                             
+                        /*for(var k = 0;k<len1;k++){                             
                             drawCircle(ctx,polygon.linePoints[j][k],5,"#ff0000","fill");
-                        }
+                        }*/
                         }
                     }
                 }
@@ -791,10 +791,10 @@
             var len = polygon.points.length;
             for(var i = 0;i<len;i++){ 
                 if(polygon.pointTypes[i]==0){
-                    //drawCircle(ctx,polygon.points[i],5,"#00ffff","fill");
+                    drawCircle(ctx,polygon.points[i],5,"#00ffff","fill");
                     drawLine(ctx,mp,polygon.points[i],"#ffffff");
                 }else if(polygon.pointTypes[i]==1){
-                    //drawCircle(ctx,polygon.points[i],5,"#ff00ff","fill");
+                    drawCircle(ctx,polygon.points[i],5,"#ff00ff","fill");
                 }   
             }  
         }
