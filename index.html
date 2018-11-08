@@ -223,7 +223,7 @@
         var AN = pointN.sub(pointA);
         return AB.cross(AM) * AB.cross(AN) == 0;
     }
-    function IsLineAtLine0(pointM, pointN, pointA, pointB)
+    /*function IsLineAtLine0(pointM, pointN, pointA, pointB)
     {
         var obj = intersection(pointM, pointN, pointA, pointB);
         if(obj && obj.t0>0 && obj.t0<1 && obj.t1>0 && obj.t1<1){
@@ -245,6 +245,15 @@
     {
         var obj = intersection(pointM, pointN, pointA, pointB);
         if(obj && obj.t0>=0 && obj.t0<1 && obj.t1>=0 && obj.t1<=1){
+            return obj;
+        }else{
+            return null;
+        }
+    }*/
+    function IsLineAtLine01(pointM, pointN, pointA, pointB)
+    {
+        var obj = intersection(pointM, pointN, pointA, pointB);
+        if(obj && obj.t0>=0 && obj.t0<1 && obj.t1>0 && obj.t1<1){
             return obj;
         }else{
             return null;
@@ -274,22 +283,44 @@
             var polygon = polygons[temp]; 
             var len = polygon.points.length;
             for(var i = 0;i<len;i++){
-                var v = polygon.points[i].sub(mp);
-                var a = Math.atan2(v.y, v.x);
-                if(a<0){
-                    a+=2*Math.PI;
+                var p = polygon.points[i];
+                bool = true;
+                foo:{
+                    for(var temp0 in polygons){   
+                        var polygon1 = polygons[temp0];
+                        var len1 = polygon1.points.length;
+                        for(var j = 0;j<len1;j++){
+                            var p0 = polygon1.points[j];
+                            var p1 = polygon1.points[(j+1)%len1];
+                            var obj01 = IsLineAtLine01(mp,p,p0,p1);
+                            if(obj01!=null){
+                                bool = false;
+                                break foo;
+                            }
+                        }
+                    }
                 }
-                var a0 = a-0.000000001;                
-                var a1 = a+0.000000001;
-                if(a0<0){
-                    a0+=2*Math.PI;
+                if(bool){
+                    var v = p.sub(mp);
+                    var a = Math.atan2(v.y, v.x);
+                    if(a<0){
+                        a+=2*Math.PI;
+                    }
+                    /*var a0 = a-0.000000001;                
+                    var a1 = a+0.000000001;
+                    if(a0<0){
+                        a0+=2*Math.PI;
+                    }
+                    if(a1>360){
+                        a1-=2*Math.PI;
+                    }
+                    angles.push(a0);
+                    angles.push(a);
+                    angles.push(a1);*/
+                    angles.push(a-0.0000000000001);
+                    angles.push(a);
+                    angles.push(a+0.0000000000001);
                 }
-                if(a1>360){
-                    a1-=2*Math.PI;
-                }
-                angles.push(a0);
-                angles.push(a);
-                angles.push(a1);
             }
         }
         angles = angles.filter(function(element, index, arr){
