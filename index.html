@@ -120,7 +120,7 @@
         };
     }
 
-    var canvas, ctx, w, h, particles,x,y;
+    var canvas, ctx, w, h, particles,x=0,y=0;
     var polygons = [];
     polygons.push({
         points:[new vector2D(50,50),new vector2D(175,75),new vector2D(50,150)],
@@ -156,7 +156,7 @@
     });*/
 
 
-    polygons.push({
+    /*polygons.push({
         points:[new vector2D(0,0),new vector2D(600,0),new vector2D(600,20),new vector2D(0,20)],
         color:"#999999",
         type:"fill"
@@ -175,6 +175,11 @@
         points:[new vector2D(0,20),new vector2D(20,20),new vector2D(20,580),new vector2D(0,580)],
         color:"#999999",
         type:"fill"
+    });*/
+    polygons.push({
+        points:[new vector2D(0,0),new vector2D(600,0),new vector2D(600,600),new vector2D(0,600)],
+        color:"#999999",
+        type:"stroke"
     });
     /*polygons.push({
         points:[new vector2D(600,600),new vector2D(0,600)],
@@ -306,6 +311,7 @@
                     if(a<0){
                         a+=2*Math.PI;
                     }
+                    //console.log(angles.indexOf(a));
                     /*var a0 = a-0.000000001;                
                     var a1 = a+0.000000001;
                     if(a0<0){
@@ -338,7 +344,7 @@
             drawPolygon(ctx,polygon.points,polygon.color,polygon.type);
         }
 
-        for(var temp in polygons){   
+        /*for(var temp in polygons){   
             var polygon = polygons[temp]; 
             var len = polygon.points.length;
             for(var i = 0;i<len;i++){      
@@ -346,7 +352,7 @@
                 var p1 = polygon.points[(i+1)%len];
                 drawLine(ctx,p0,p1,"#00ffff");
             }
-        }
+        }*/
         var points = [];
         for(var temp in angles){
             var r = 10;
@@ -378,12 +384,15 @@
             }
         }
 
+        var gradient = ctx.createRadialGradient(mp.x, mp.y, 0, mp.x, mp.y, 600);//createRadialFradient(mp.x, mp.y, 0, mp.x, mp.y, 200);
+        gradient.addColorStop(0, '#ffff00');
+        gradient.addColorStop(1, '#000000');
 
-        drawPolygon(ctx,points,"#ff0000","fill");
+        drawPolygon(ctx,points,gradient,"fill");
 
-        for(var temp in points){
+        /*for(var temp in points){
             drawLine(ctx,mp,points[temp],"#ffff00");
-        }
+        }*/
 
         drawCircle(ctx,mp,5,"#0000ff","fill");
     }
