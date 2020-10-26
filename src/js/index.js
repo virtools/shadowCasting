@@ -5,6 +5,7 @@ import { Rect } from "./rect";
 import { cropNumber } from "./number";
 import { setShadow, clearShadow, drawPolygon, drawCircle, drawLine } from "./canvas";
 import { debounce } from "./base";
+import { Matrix2D } from "./matrix";
 
 //取得與直線交點最短距離線段索引號
 const getShortestDistanceData = (point, vector, lines) => {
@@ -120,7 +121,7 @@ const getLightCastData = (rect, polygons) => {
 };
 const update = () => {
   //轉換成阻擋與投射線資料
-  const { lines, points } = getLightCastData(rect, polygons);
+  //const { lines, points } = getLightCastData(rect, polygons);
 
   /*ctx.save();
   lines.forEach((line) => {
@@ -143,15 +144,13 @@ const update = () => {
     return !lines.some((line) => {
       const len0 = Vector.length(line.vector);
       const obj = Line.intersection({ point: mPos, vector: v }, line);
-      if (
+      return (
         obj &&
         obj.t0 > 0 &&
         obj.t0 * len < len - deviation &&
         obj.t1 * len0 >= 0 - deviation &&
         obj.t1 * len0 <= len0 + deviation
-      ) {
-        return true;
-      }
+      );
     });
   });
 
@@ -213,7 +212,29 @@ const update = () => {
     lightPolygons = [...lightPolygons.slice(index, lightPolygons.length), ...lightPolygons.slice(0, index), mPos, mPos];
   }
 
-  shadowPolygons = lines
+  /*const rectLines = Rect.getLines(rect);
+  const lines01 = lightPolygons
+    .map((point, i, array) => {
+      if (i % 2 === 0) {
+        return Point.getLine(point, array[i + 1]);
+      }
+    })
+    .filter((line) => line);
+
+  shadowPolygons = lines01
+    .flatMap((line) => {
+      return rectLines.map((line0) => {
+        const obj = Line.lineCast(mPos, line, line0);
+        if (obj) {
+          return obj;
+        }
+      });
+    })
+    .filter((points) => {
+      return points !== undefined;
+    });*/
+
+  /*shadowPolygons = lines
     .flatMap((line, index) => {
       if (index >= 4) {
         return lines.map((line0, index0) => {
@@ -229,30 +250,36 @@ const update = () => {
     })
     .filter((points) => {
       return points !== undefined;
-    });
+    });*/
 };
 const render = () => {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
   ctx.save();
+  const radialGradient0 = ctx.createRadialGradient(...mPos, 0, ...mPos, Vector.length([cWidth, cHeight]));
+  radialGradient0.addColorStop(0, "rgba(0,0,0,1)");
+  radialGradient0.addColorStop(0.3, "rgba(0,0,0,0.5)");
+  radialGradient0.addColorStop(1, "rgba(0,0,0,0)");
   shadowPolygons.forEach((polygon) => {
-    const v = Point.getVector(polygon[0], polygon[1]);
+    drawPolygon(ctx, polygon, radialGradient0, "fill");
+    /*const v = Point.getVector(polygon[0], polygon[1]);
     [v[0], v[1]] = [-v[1], v[0]];
     VectorE.scale(VectorE.normalize(v), 200);
     var linearGradient = ctx.createLinearGradient(...polygon[0], ...Point.addVector(polygon[0], v));
     linearGradient.addColorStop(0, "rgba(0,0,0,1)");
     linearGradient.addColorStop(0.3, "rgba(0,0,0,0.5)");
     linearGradient.addColorStop(1, "rgba(0,0,0,0)");
-    drawPolygon(ctx, polygon, linearGradient, "fill");
+    drawPolygon(ctx, polygon, linearGradient, "fill");*/
   });
-
   ctx.restore();
 
   ctx.save();
   const radialGradient = ctx.createRadialGradient(...mPos, 0, ...mPos, Vector.length([cWidth, cHeight]));
-  radialGradient.addColorStop(0, "#ffff00");
-  radialGradient.addColorStop(1, "#000000");
+  radialGradient.addColorStop(0, "hsl(40,100%,70%)");
+  radialGradient.addColorStop(0.1, "hsl(50,100%,55%)");
+  radialGradient.addColorStop(0.3, "hsl(60,100%,50%)");
+  radialGradient.addColorStop(1, "hsl(60,0%,0%)");
   drawPolygon(ctx, lightPolygons, radialGradient, "fill");
   ctx.restore();
 
@@ -268,7 +295,7 @@ const render = () => {
   });
   ctx.restore();
 
-  ctx.save();
+  /*ctx.save();
   ctx.globalCompositeOperation = "lighter";
   setShadow(ctx, 0, 0, 3, "#ffffff");
   lightPolygons.forEach((point, i, array) => {
@@ -276,17 +303,30 @@ const render = () => {
       drawLine(ctx, point, array[i + 1], "#ffffff", 1);
     }
   });
-  ctx.restore();
+  ctx.restore();*/
 };
 const loop = () => {
   requestAnimationFrame(loop);
+  const nowTime = Date.now();
+  const delta = (nowTime - oldTime) / 1000;
+  oldTime = nowTime;
+  fps = 1 / delta;
   ctx.clearRect(0, 0, cWidth, cHeight);
   ctx.fillStyle = "#111111";
   ctx.fillRect(0, 0, cWidth, cHeight);
   update();
   render();
-};
 
+  ctx.save();
+  ctx.font = "bold 18px Noto Sans TC";
+  ctx.textAlign = "start";
+  ctx.textBaseline = "hanging";
+  ctx.fillStyle = "#ff0000";
+  ctx.fillText(fps.toFixed(1), 10, 10);
+  ctx.restore();
+};
+let fps = 0;
+let oldTime = Date.now();
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let cWidth, cHeight;
@@ -296,7 +336,7 @@ const mPos = [cWidth * 0.5, cHeight * 0.5];
 let lightPolygons = [];
 let shadowPolygons = [];
 const rect = { point: [0, 0], size: [600, 600] };
-const polygons = [];
+let polygons = [];
 /*polygons.push({
   points: [
     [0, 0],
@@ -308,23 +348,106 @@ const polygons = [];
   type: "stroke",
   name: "rect",
 });*/
+const getElementPagePos = (element) => {
+  const pos = [0, 0];
+  let m = element;
+  while (m) {
+    pos[0] += m.scrollLeft ?? 0;
+    pos[1] += m.scrollTop ?? 0;
+    m = m.parentElement;
+  }
+  const rect = element.getBoundingClientRect();
+  return [rect.x + pos[0], rect.y + pos[1]];
+};
+const getSVGMatrix = (element) => {
+  let m = element;
+  let matrix2D = Matrix2D.identity();
+  while (m) {
+    if (m.tagName == "svg") {
+      return matrix2D;
+    }
+
+    const data = m.transform.baseVal.consolidate();
+    if (data && data.matrix) {
+      const matrix = [
+        data.matrix.a,
+        data.matrix.b,
+        0,
+        data.matrix.c,
+        data.matrix.d,
+        0,
+        data.matrix.e,
+        data.matrix.f,
+        1,
+      ];
+      matrix2D = Matrix2D.multiply(matrix, matrix2D);
+    }
+
+    m = m.parentElement;
+  }
+  return;
+};
 const setPolygons = () => {
+  polygons = [];
   for (let i = 0; i < 100; i++) {
     const angle = 2 * Math.PI * Math.random();
     const len = 20 + 20 * Math.random();
     const point = [len * 0.5 + (cWidth - len) * Math.random(), len * 0.5 + (cHeight - len) * Math.random()];
     const point0 = [Math.cos(angle), Math.sin(angle)];
-    polygons[i] = {
+    polygons.push({
       points: [
         Point.addVector(point, Vector.scale(point0, -len * 0.5)),
         Point.addVector(point, Vector.scale(point0, len * 0.5)),
       ],
-      color: "#993333",
+      color: "#333399",
       type: "stroke",
-    };
+    });
   }
+  const svg = document.getElementById("svg");
+  const svg_path = svg.querySelectorAll("#g > path");
+  const path01 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const textPolygons = [...svg_path].flatMap((path, index) => {
+    const relativePos = getElementPagePos(svg);
+    const matrix = getSVGMatrix(path);
+    if (matrix) {
+      VectorE.add(relativePos, Matrix2D.transform(matrix, [0, 0]));
+    }
+    return path
+      .getAttribute("d")
+      .split(/\m|\M/g)
+      .filter((s) => s)
+      .map((s) => {
+        const obj = s.match(/^\s*(?<x>\-?\d+(.\d*)?)\s*\,?\s*(?<y>\-?\d+(.\d*)?)/);
+        return { s: "m" + s, point: [parseFloat(obj.groups.x), parseFloat(obj.groups.y)] };
+      })
+      .map((obj, ii, array) => {
+        path01.setAttribute("d", obj.s);
+        const len = path01.getTotalLength();
+        const movePoint = ii === 0 ? [0, 0] : array[ii - 1].point;
+        PointE.addVector(movePoint, relativePos);
+        //const movePoint = ii === 0 ? [0, 0] : [100, 100];
+        return {
+          points: new Array(Math.ceil(len / 5)).fill(undefined).map((el, i, array) => {
+            const point = posToArray(path01.getPointAtLength((i / array.length) * len));
+            return Point.addVector(point, movePoint);
+          }),
+          color: "#993333",
+          type: "stroke",
+        };
+      })
+      .filter((obj) => obj);
+  });
+  //console.log(textPolygons);
+  polygons.push(...textPolygons);
+};
+const posToArray = (pos) => {
+  return [pos.x, pos.y];
 };
 setPolygons();
+
+//轉換成阻擋與投射線資料
+let { lines, points } = getLightCastData(rect, polygons);
+
 /*for (let i = 0; i < 10; i++) {
   const point = [cWidth * Math.random(), cHeight * Math.random()];
   const angle = 2 * Math.PI * Math.random();
@@ -390,6 +513,9 @@ const resize = (e) => {
   mPos[1] = cropNumber(mPos[1], Rect.getTop(rect), Rect.getBottom(rect));
 
   setPolygons();
+  const obj = getLightCastData(rect, polygons);
+  lines = obj.lines;
+  points = obj.points;
 };
 window.addEventListener("mousemove", mousemove);
 window.addEventListener("resize", debounce(resize));
