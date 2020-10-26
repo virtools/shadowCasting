@@ -1,6 +1,10 @@
 class Vector {
   static normalize(vector) {
-    return Vector.scale(vector, 1 / Vector.length(vector));
+    const len = Vector.length(vector);
+    if (len) {
+      return Vector.scale(vector, 1 / Vector.length(vector));
+    }
+    return vector;
   }
   static rotate(vector, angle) {
     let cos0 = Math.cos(angle);
@@ -43,6 +47,13 @@ class VectorE {
   static set(vector, x, y) {
     vector[0] = x;
     vector[1] = y;
+    return vector;
+  }
+  static normalize(vector) {
+    const len = Vector.length(vector);
+    if (len) {
+      VectorE.scale(vector, 1 / len);
+    }
     return vector;
   }
   static add(vector0, vector1) {

@@ -1,81 +1,36 @@
-import { Point } from "./point";
+import { Point, PointE } from "./point";
 import { Vector, VectorE } from "./vector";
-import { setShadow, clearShadow } from "./canvas";
+import { Line } from "./line";
+import { Rect } from "./rect";
+import { cropNumber } from "./number";
+import { setShadow, clearShadow, drawPolygon, drawCircle, drawLine } from "./canvas";
+import { debounce } from "./base";
 
-function intersectionPV(p0, v0, p1, v1) {
-  const c1 = Vector.cross(v0, v1);
-  if (c1 === 0) {
-    return null;
-  }
-  const v = Point.getVector(p0, p1);
-  /*const c2 = Vector.cross(v, v1);
-  if (c2 === 0) {
-    return "兩線重疊";
-  } else {
-    return "兩線平行但不重疊";
-  }*/
-  return {
-    t0: Vector.cross(v, v1) / c1,
-    t1: Vector.cross(v, v0) / c1,
-  };
-}
-
-//判斷與直線交點比原先近
-const lessThanVector = (point, vector, lines) => {
-  let distance = Vector.length(vector);
-  return !lines.some((line) => {
-    const obj = intersectionPV(point, vector, line.point, line.vector);
-    if (obj && obj.t0 > 0 && obj.t1 >= 0 && obj.t1 <= 1) {
-      const d = obj.t0 * Vector.length(vector);
-      return d < distance && Math.abs(d - distance) > 0.0000001;
-    }
-  });
-};
-//取得與直線交點最短距離
-const getShortestDistance = (point, vector, lines) => {
-  let distance = Infinity;
-  lines.forEach((line01) => {
-    const obj = intersectionPV(point, vector, line01.point, line01.vector);
-    if (obj && obj.t0 >= 0 && obj.t1 >= 0 && obj.t1 <= 1) {
-      const d = obj.t0 * Vector.length(vector);
-      if (d < distance) {
-        distance = d;
-      }
-    }
-  });
-  return distance;
-};
 //取得與直線交點最短距離線段索引號
 const getShortestDistanceData = (point, vector, lines) => {
   let distance = Infinity;
   let index = -1;
   let intersectionData = null;
-  lines.forEach((line01, index01) => {
-    const obj = intersectionPV(point, vector, line01.point, line01.vector);
-    if (obj && obj.t0 >= 0 && obj.t1 >= 0 && obj.t1 <= 1) {
+  lines.forEach((line, i) => {
+    const obj = Line.intersection({ point, vector }, line);
+    if (obj && obj.t0 > 0 && obj.t1 >= 0 && obj.t1 <= 1) {
       const d = obj.t0 * Vector.length(vector);
       if (d < distance) {
         distance = d;
-        index = index01;
+        index = i;
         intersectionData = obj;
       }
     }
   });
   return { index, intersectionData };
 };
-//點投射到某個直線上
-const pointCast = (point, vector, line) => {
-  const obj = intersectionPV(point, vector, line.point, line.vector);
-  if (obj) {
-    return Point.addVector(point, Vector.scale(vector, obj.t0));
-  }
-};
+
 //取得所有直線的交點
 const getIntersectionPoints = (lines) => {
   const intersectionPoints = [];
   for (let i = 0; i < lines.length - 1; i++) {
     for (let j = i + 1; j < lines.length; j++) {
-      const obj = intersectionPV(lines[i].point, lines[i].vector, lines[j].point, lines[j].vector);
+      const obj = Line.intersection(lines[i], lines[j]);
       if (obj && obj.t0 > 0 && obj.t0 < 1 && obj.t1 > 0 && obj.t1 < 1) {
         intersectionPoints.push(Point.addVector(lines[i].point, Vector.scale(lines[i].vector, obj.t0)));
       }
@@ -83,203 +38,266 @@ const getIntersectionPoints = (lines) => {
   }
   return intersectionPoints;
 };
+const getLightCastData = (rect, polygons) => {
+  //邊界範圍
+  const rectL = Rect.getLeft(rect);
+  const rectR = Rect.getRight(rect);
+  const rectT = Rect.getTop(rect);
+  const rectB = Rect.getBottom(rect);
 
-function update() {
   //將所有多邊形的邊線取出
-  const lines = polygons.flatMap((polygon, index01) => {
-    if (polygon.points.length > 2) {
-      return polygon.points.map((point, index, array) => {
-        return { point, vector: Point.getVector(point, array[(index + 1) % array.length]) };
-      });
-    } else if (polygon.points.length > 1) {
-      return { point: polygon.points[0], vector: Point.getVector(polygon.points[0], polygon.points[1]) };
-    }
-  });
+  const rectLines = Rect.getLines(rect);
+  const polygonsLines = polygons
+    .map((polygon) => {
+      if (polygon.points.length > 2) {
+        return polygon.points.map((point, index, array) => {
+          return { point: point.slice(), vector: Point.getVector(point, array[(index + 1) % array.length]) };
+        });
+      } else if (polygon.points.length > 1) {
+        return [{ point: polygon.points[0].slice(), vector: Point.getVector(polygon.points[0], polygon.points[1]) }];
+      }
+    })
+    .map((lines) => {
+      return lines
+        .map((line) => {
+          //裁切超出邊界的線段
+          let bool = false;
+          rectLines.forEach((rectLine) => {
+            const obj = Line.intersection(rectLine, line);
+            if (Line.checkIntersectionData(obj)) {
+              bool = true;
+              const v = Point.getVector(rectLine.point, line.point);
+              if (Vector.cross(rectLine.vector, v) > 0) {
+                VectorE.scale(line.vector, obj.t1);
+              } else {
+                PointE.addVector(line.point, Vector.scale(line.vector, obj.t1));
+                VectorE.scale(line.vector, 1 - obj.t1);
+              }
+            }
+          });
+          if (!bool) {
+            //判斷直線的兩個點是否在範圍內
+            if (line.point[0] >= rectL && line.point[0] <= rectR && line.point[1] >= rectT && line.point[1] <= rectB) {
+              bool = true;
+            } else {
+              const p = Point.addVector(line.point, line.vector);
+              if (p[0] >= rectL && p[0] <= rectR && p[1] >= rectT && p[1] <= rectB) {
+                bool = true;
+              }
+            }
+          }
+          //console.log(bool, i);
+          if (bool) {
+            return line;
+          }
+        })
+        .filter((line) => {
+          return line !== undefined;
+        });
+    });
+
+  //阻擋投射的線
+  const lines = [...rectLines, ...polygonsLines.flat()];
+
   //取得所有直線的交點
   const intersectionPoints = getIntersectionPoints(lines);
 
   //投射的點
-  const castPoint = [
-    ...polygons.flatMap((polygon) => {
-      return polygon.points;
+  const points = [
+    ...Rect.getPoints(rect),
+    ...polygonsLines.flatMap((lines) => {
+      if (lines.length === 1) {
+        return [lines[0].point, Point.addVector(lines[0].point, lines[0].vector)];
+      } else {
+        return lines.map((line) => {
+          return line.point;
+        });
+      }
     }),
     ...intersectionPoints,
   ];
+  return { lines, points };
+};
+const update = () => {
+  //轉換成阻擋與投射線資料
+  const { lines, points } = getLightCastData(rect, polygons);
 
-  //放射線的點
-  const points = castPoint.filter((point) => {
+  /*ctx.save();
+  lines.forEach((line) => {
+    drawLine(ctx, line.point, Point.addVector(line.point, line.vector), "#00ff00", 4);
+  });
+  ctx.restore();*/
+
+  /*ctx.save();
+  points.forEach((point) => {
+    drawCircle(ctx, point, 5, "#00ff00", "fill");
+  });
+  ctx.restore();*/
+
+  //投射線的點
+  const deviation = 0.000001;
+  const castPoint = points.filter((point) => {
     //消除一些背面的點
     const v = Point.getVector(mPos, point);
-    return lessThanVector(mPos, v, lines);
+    const len = Vector.length(v);
+    return !lines.some((line) => {
+      const len0 = Vector.length(line.vector);
+      const obj = Line.intersection({ point: mPos, vector: v }, line);
+      if (
+        obj &&
+        obj.t0 > 0 &&
+        obj.t0 * len < len - deviation &&
+        obj.t1 * len0 >= 0 - deviation &&
+        obj.t1 * len0 <= len0 + deviation
+      ) {
+        return true;
+      }
+    });
   });
 
+  /*ctx.save();
+  castPoint.forEach((point) => {
+    drawCircle(ctx, point, 5, "#00ff00", "fill");
+  });
+  ctx.restore();*/
+
   //排列角度順序
-  const angles = points.map((point, index) => {
+  const angles = castPoint.map((point, index) => {
     return { angle: Vector.getAngle(Point.getVector(mPos, point)), index: index };
   });
   angles.sort((a, b) => a.angle - b.angle);
 
   lightPolygons = angles.flatMap((angle, i, array) => {
     //判斷是否穿過縫隙投射
-    const pp0 = points[angle.index];
-    const pp1 = points[array[(i + 1) % array.length].index];
+    const pp0 = castPoint[angle.index];
+    const pp1 = castPoint[array[(i + 1) % array.length].index];
     const point = Point.toPosRate(pp0, pp1, 0.5);
     const vector = Point.getVector(mPos, point);
 
     //抓取兩投射線中穿越所投射的line資訊
     const data = getShortestDistanceData(mPos, vector, lines);
-    if (data.index != -1 && data.intersectionData.t0 > 1 + 0.0000001) {
+    if (data.index != -1 && data.intersectionData.t0 - 1 > 0) {
       //將兩個投射線延伸投射到指定的line
-      const p0 = pointCast(mPos, Point.getVector(mPos, pp0), lines[data.index]);
-      const p1 = pointCast(mPos, Point.getVector(mPos, pp1), lines[data.index]);
+      const line = lines[data.index];
+      const p0 = Line.pointCast(mPos, Point.getVector(mPos, pp0), line);
+      if (!p0) {
+        return [];
+      }
+      const p1 = Line.pointCast(mPos, Point.getVector(mPos, pp1), line);
+      if (!p1) {
+        return [];
+      }
       return [p0, p1];
     } else {
       return [pp0, pp1];
     }
   });
-  /*lightPolygons.forEach((point) => {
-    drawCircle(ctx, point, 10, "#ff0", "fill");
-  });*/
 
-  /*//將所有多邊形的邊線取出
-  const lines = polygons.flatMap((polygon) => {
-    return polygon.points.map((point, index, array) => {
-      return { point, vector: Vector.sub(array[(index + 1) % array.length], point) };
-    });
-  });
-  //產生所有直線的交點
-  const intersectionPoints = [];
-  for (let i = 0; i < lines.length - 1; i++) {
-    for (let j = i + 1; j < lines.length; j++) {
-      const obj = intersectionPV(lines[i].point, lines[i].vector, lines[j].point, lines[j].vector);
-      if (obj && obj.t0 > 0 && obj.t0 < 1 && obj.t1 > 0 && obj.t1 < 1) {
-        intersectionPoints.push(Point.addVector(lines[i].point, Vector.scale(lines[i].vector, obj.t0)));
-      }
-    }
+  //補充在邊界角落的點
+  const rectL = Rect.getLeft(rect);
+  const rectR = Rect.getRight(rect);
+  const rectT = Rect.getTop(rect);
+  const rectB = Rect.getBottom(rect);
+  let index = -1;
+  if (mPos[0] <= rectL) {
+    index = lightPolygons.findIndex((point) => point[0] <= rectL);
+  } else if (mPos[0] >= rectR) {
+    index = lightPolygons.findIndex((point) => point[0] >= rectR);
+  } else if (mPos[1] <= rectT) {
+    index = lightPolygons.findIndex((point) => point[1] <= rectT);
+  } else if (mPos[1] >= rectB) {
+    index = lightPolygons.findIndex((point) => point[1] >= rectB);
+  }
+  if (index !== -1) {
+    index += index % 2 ? 1 : 0;
+    lightPolygons = [...lightPolygons.slice(index, lightPolygons.length), ...lightPolygons.slice(0, index), mPos, mPos];
   }
 
-  const mainData = []; //存放角度與位置
-
-  intersectionPoints
-    .filter((point) => {
-      //消除一些背面的點
-      const v = Point.getVector(mPos, point);
-      return lessThanVector(mPos, v, lines);
-    })
-    .forEach((point) => {
-      const v = Point.getVector(mPos, point);
-      let angle = Vector.getAngle(v);
-      mainData.push({ angle: angle, pos: point });
-    });
-
-  //依滑鼠朝多邊形的每個點放射去掃描
-  lines
-    .filter((line) => {
-      //消除一些背面的點
-      const v = Point.getVector(mPos, line.point);
-      return lessThanVector(mPos, v, lines);
-    })
-    .forEach((line) => {
-      const v = Point.getVector(mPos, line.point);
-      let angle = Vector.getAngle(v);
-      mainData.push({ angle: angle, pos: line.point });
-      mainData.push({ angle: angle - 0.0000000000001 });
-      mainData.push({ angle: angle + 0.0000000000001 });
-    });
-
-  //排列角度順序
-  mainData.sort((a, b) => b.angle - a.angle);
-
-  //將放射狀射線去跟所有邊線做交點取最近的距離
-  lightPolygons = mainData
-    .map((data) => {
-      if (data.pos) {
-        return data.pos;
-      } else {
-        const v = [Math.cos(data.angle), Math.sin(data.angle)];
-        const distance = getShortestDistance(mPos, v, lines);
-        if (distance !== Infinity) {
-          return Point.addVector(mPos, Vector.scale(v, distance));
-        }
+  shadowPolygons = lines
+    .flatMap((line, index) => {
+      if (index >= 4) {
+        return lines.map((line0, index0) => {
+          //if (index0 != index) {
+          if (index0 < 4) {
+            const obj = Line.lineCast(mPos, line, line0);
+            if (obj) {
+              return obj;
+            }
+          }
+        });
       }
     })
-    .filter((point) => point !== undefined);*/
-}
-function render() {
+    .filter((points) => {
+      return points !== undefined;
+    });
+};
+const render = () => {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+
   ctx.save();
-  /*const gradient = ctx.createRadialGradient(...mPos, 0, ...mPos, Vector.length([cWidth, cHeight]));
-  gradient.addColorStop(0, "#ffff00");
-  gradient.addColorStop(1, "#000000");
-  drawPolygon(ctx, lightPolygons, gradient, "fill");*/
-  drawPolygon(ctx, lightPolygons, "#ff0", "fill");
+  shadowPolygons.forEach((polygon) => {
+    const v = Point.getVector(polygon[0], polygon[1]);
+    [v[0], v[1]] = [-v[1], v[0]];
+    VectorE.scale(VectorE.normalize(v), 200);
+    var linearGradient = ctx.createLinearGradient(...polygon[0], ...Point.addVector(polygon[0], v));
+    linearGradient.addColorStop(0, "rgba(0,0,0,1)");
+    linearGradient.addColorStop(0.3, "rgba(0,0,0,0.5)");
+    linearGradient.addColorStop(1, "rgba(0,0,0,0)");
+    drawPolygon(ctx, polygon, linearGradient, "fill");
+  });
+
   ctx.restore();
+
+  ctx.save();
+  const radialGradient = ctx.createRadialGradient(...mPos, 0, ...mPos, Vector.length([cWidth, cHeight]));
+  radialGradient.addColorStop(0, "#ffff00");
+  radialGradient.addColorStop(1, "#000000");
+  drawPolygon(ctx, lightPolygons, radialGradient, "fill");
+  ctx.restore();
+
+  drawCircle(ctx, mPos, 2, "#0000ff", "fill");
+  //drawCircle(ctx, [1500, 0], 10, "#00ff00", "fill");
+  //drawCircle(ctx, [300, 400], 10, "#00ff00", "fill");
 
   ctx.save();
   ctx.lineWidth = 2;
   polygons.forEach((polygon) => {
     drawPolygon(ctx, polygon.points, polygon.color, polygon.type);
+    //drawCircle(ctx, polygon.points[0], 5, "#00ff00", "fill");
   });
   ctx.restore();
 
-  /*ctx.save();
+  ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  setShadow(ctx, 0, 0, 10, "#ffffff");
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
+  setShadow(ctx, 0, 0, 3, "#ffffff");
   lightPolygons.forEach((point, i, array) => {
     if (i % 2 === 0) {
-      drawLine(ctx, point, array[i + 1], "#ffffff", 5);
+      drawLine(ctx, point, array[i + 1], "#ffffff", 1);
     }
   });
-  ctx.restore();*/
-}
-function loop() {
+  ctx.restore();
+};
+const loop = () => {
   requestAnimationFrame(loop);
   ctx.clearRect(0, 0, cWidth, cHeight);
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(0, 0, cWidth, cHeight);
   update();
   render();
-}
-function drawPolygon(ctx, points, color, type) {
-  if (color) {
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      ctx[index === 0 ? "moveTo" : "lineTo"](...point);
-    });
-    ctx.closePath();
-    ctx[type + "Style"] = color;
-    ctx[type]();
-  }
-}
-function drawCircle(ctx, point, radius, color, type) {
-  if (color) {
-    ctx.beginPath();
-    ctx.arc(...point, radius, 0, 2 * Math.PI);
-    ctx.closePath();
-    ctx[type + "Style"] = color;
-    ctx[type]();
-  }
-}
-function drawLine(ctx, point01, point02, color, lineWidth = 1) {
-  if (color) {
-    ctx.beginPath();
-    ctx.lineWidth = lineWidth;
-    ctx.moveTo(...point01);
-    ctx.lineTo(...point02);
-    ctx.closePath();
-    ctx.strokeStyle = color;
-    ctx.stroke();
-  }
-}
+};
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let cWidth, cHeight;
-const mPos = [300, 300];
+cWidth = window.innerWidth;
+cHeight = window.innerHeight;
+const mPos = [cWidth * 0.5, cHeight * 0.5];
 let lightPolygons = [];
+let shadowPolygons = [];
+const rect = { point: [0, 0], size: [600, 600] };
 const polygons = [];
-polygons.push({
+/*polygons.push({
   points: [
     [0, 0],
     [600, 0],
@@ -288,86 +306,92 @@ polygons.push({
   ],
   color: "",
   type: "stroke",
-});
-/*polygons.push({
-  points: [
-    [50, 50],
-    [175, 75],
-    [50, 150],
-  ],
-  color: "#999999",
-  type: "fill",
-});
-polygons.push({
-  points: [
-    [250, 150],
-    [375, 175],
-    [250, 250],
-  ],
-  color: "#999999",
-  type: "fill",
-});
-polygons.push({
-  points: [
-    [375, 250],
-    [475, 375],
-    [375, 450],
-  ],
-  color: "#999999",
-  type: "fill",
+  name: "rect",
 });*/
-
-cWidth = window.innerWidth;
-cHeight = window.innerHeight;
-/*polygons.push({
-  points: [
-    [378.89033342323853, 597.60532325293],
-    [1218.33126852952, 605.3739335869079],
-  ],
-  color: "#999999",
-  type: "stroke",
-});
-polygons.push({
-  points: [
-    [278.21780619138843, 166.4345298438775],
-    [309.3974948931857, 664.1766874001323],
-  ],
-  color: "#999999",
-  type: "stroke",
-});*/
-for (let i = 0; i < 100; i++) {
+const setPolygons = () => {
+  for (let i = 0; i < 100; i++) {
+    const angle = 2 * Math.PI * Math.random();
+    const len = 20 + 20 * Math.random();
+    const point = [len * 0.5 + (cWidth - len) * Math.random(), len * 0.5 + (cHeight - len) * Math.random()];
+    const point0 = [Math.cos(angle), Math.sin(angle)];
+    polygons[i] = {
+      points: [
+        Point.addVector(point, Vector.scale(point0, -len * 0.5)),
+        Point.addVector(point, Vector.scale(point0, len * 0.5)),
+      ],
+      color: "#993333",
+      type: "stroke",
+    };
+  }
+};
+setPolygons();
+/*for (let i = 0; i < 10; i++) {
   const point = [cWidth * Math.random(), cHeight * Math.random()];
   const angle = 2 * Math.PI * Math.random();
-  const len = 20 + 20 * Math.random();
+  const len = 200 + 500 * Math.random();
   polygons.push({
     points: [point, Point.addVector(point, Vector.scale([Math.cos(angle), Math.sin(angle)], len))],
-    color: "#999999",
+    color: "#993333",
     type: "stroke",
   });
-}
-//console.log(polygons);
+}*/
+
 /*polygons.push({
   points: [
-    [30, 30],
-    [100, 100],
+    [100, 200],
+    [200, 200],
   ],
-  color: "#999999",
+  color: "#993333",
+  type: "stroke",
+});
+
+polygons.push({
+  points: [
+    [150, 500],
+    [300, 400],
+  ],
+  color: "#993333",
+  type: "stroke",
+});
+
+polygons.push({
+  points: [
+    [150, 400],
+    [800, 500],
+  ],
+  color: "#993333",
+  type: "stroke",
+});
+
+polygons.push({
+  points: [
+    [650, 400],
+    [650, 500],
+  ],
+  color: "#993333",
   type: "stroke",
 });*/
 
+//VectorE.set(mPos, 549, 734);
+//VectorE.set(mPos, 541, 814);
+//VectorE.set(mPos, 291, 406);
+
 const mousemove = (e) => {
-  //console.log(e.pageX, e.pageY);
   VectorE.set(mPos, e.pageX, e.pageY);
+  mPos[0] = cropNumber(mPos[0], Rect.getLeft(rect), Rect.getRight(rect));
+  mPos[1] = cropNumber(mPos[1], Rect.getTop(rect), Rect.getBottom(rect));
+  //console.log(mPos);
 };
 const resize = (e) => {
   cWidth = canvas.width = window.innerWidth;
   cHeight = canvas.height = window.innerHeight;
-  VectorE.set(polygons[0].points[0], 0, 0);
-  VectorE.set(polygons[0].points[1], cWidth, 0);
-  VectorE.set(polygons[0].points[2], cWidth, cHeight);
-  VectorE.set(polygons[0].points[3], 0, cHeight);
+  VectorE.set(rect.size, cWidth, cHeight);
+  mPos[0] = cropNumber(mPos[0], Rect.getLeft(rect), Rect.getRight(rect));
+  mPos[1] = cropNumber(mPos[1], Rect.getTop(rect), Rect.getBottom(rect));
+
+  setPolygons();
 };
 window.addEventListener("mousemove", mousemove);
-window.addEventListener("resize", resize);
+window.addEventListener("resize", debounce(resize));
 resize();
 loop();
