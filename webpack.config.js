@@ -135,7 +135,7 @@ module.exports = {
     }),
     new MiniCssExtractPlugin({ filename: "css/[name].[hash].css" }),
     new HtmlWebpackPlugin({
-      title: "pathDrag",
+      title: "shadowCasting",
       template: "./src/index.html",
       filename: "index.html",
     }),

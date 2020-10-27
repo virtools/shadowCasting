@@ -39,7 +39,8 @@ const getIntersectionPoints = (lines) => {
   }
   return intersectionPoints;
 };
-const getLightCastData = (rect, polygons) => {
+const update = () => {
+  const deviation = 0.000001;
   //邊界範圍
   const rectL = Rect.getLeft(rect);
   const rectR = Rect.getRight(rect);
@@ -117,11 +118,6 @@ const getLightCastData = (rect, polygons) => {
     }),
     ...intersectionPoints,
   ];
-  return { lines, points };
-};
-const update = () => {
-  //轉換成阻擋與投射線資料
-  //const { lines, points } = getLightCastData(rect, polygons);
 
   /*ctx.save();
   lines.forEach((line) => {
@@ -136,7 +132,6 @@ const update = () => {
   ctx.restore();*/
 
   //投射線的點
-  const deviation = 0.000001;
   const castPoint = points.filter((point) => {
     //消除一些背面的點
     const v = Point.getVector(mPos, point);
@@ -166,6 +161,8 @@ const update = () => {
   });
   angles.sort((a, b) => a.angle - b.angle);
 
+  //console.log(angles.length * lines.length, 4 * (angles.length / 4) * (lines.length / 4));
+
   lightPolygons = angles.flatMap((angle, i, array) => {
     //判斷是否穿過縫隙投射
     const pp0 = castPoint[angle.index];
@@ -193,10 +190,10 @@ const update = () => {
   });
 
   //補充在邊界角落的點
-  const rectL = Rect.getLeft(rect);
+  /*const rectL = Rect.getLeft(rect);
   const rectR = Rect.getRight(rect);
   const rectT = Rect.getTop(rect);
-  const rectB = Rect.getBottom(rect);
+  const rectB = Rect.getBottom(rect);*/
   let index = -1;
   if (mPos[0] <= rectL) {
     index = lightPolygons.findIndex((point) => point[0] <= rectL);
@@ -446,7 +443,7 @@ const posToArray = (pos) => {
 setPolygons();
 
 //轉換成阻擋與投射線資料
-let { lines, points } = getLightCastData(rect, polygons);
+//let { lines, points } = getLightCastData(rect, polygons);
 
 /*for (let i = 0; i < 10; i++) {
   const point = [cWidth * Math.random(), cHeight * Math.random()];
@@ -512,10 +509,10 @@ const resize = (e) => {
   mPos[0] = cropNumber(mPos[0], Rect.getLeft(rect), Rect.getRight(rect));
   mPos[1] = cropNumber(mPos[1], Rect.getTop(rect), Rect.getBottom(rect));
 
-  setPolygons();
-  const obj = getLightCastData(rect, polygons);
+  //setPolygons();
+  /*const obj = getLightCastData(rect, polygons);
   lines = obj.lines;
-  points = obj.points;
+  points = obj.points;*/
 };
 window.addEventListener("mousemove", mousemove);
 window.addEventListener("resize", debounce(resize));
